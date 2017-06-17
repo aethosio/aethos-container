@@ -41,6 +41,9 @@ function installDependencies(app, config, service) {
 }
 
 module.exports.installServices = function installServices(app, config) {
+  if (!config.serviceFolder) {
+    throw new Error('aethos-container.installServices config requires serviceFolder entry');
+  }
   const normalizedPath = config.serviceFolder;
 
   return new Promise((resolve, reject) => {
