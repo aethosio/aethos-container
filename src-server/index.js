@@ -40,6 +40,19 @@ function installDependencies(app, config, service) {
   return Promise.all(dependencies);
 }
 
+function installFactory(app, config, serviceFactory) {
+  return Promise.resolve(serviceFactory(config))
+    .then(serviceList => {
+      for (const service of serviceList) {
+        services.push(service);
+        // Keep a list of services by name.
+        serviceIndex[service.name] = service;
+      }
+    });
+}
+
+module.exports.installFactory = installFactory;
+
 module.exports.installServices = function installServices(app, config) {
   if (!config.serviceFolder) {
     throw new Error('aethos-container.installServices config requires serviceFolder entry');
@@ -55,25 +68,18 @@ module.exports.installServices = function installServices(app, config) {
       resolve(files);
     });
   })
-  .then(files => {
-    // Iterate through the files and get the service factory
-    return Promise.all(files.map(file => {
-      const serviceFactory = require(path.join(normalizedPath, file)).serviceFactory;
-      // serviceFactory() may be a Promise that resolves to a list of services
-      return Promise.resolve(serviceFactory())
-      .then(serviceList => {
-        for (const service of serviceList) {
-          services.push(service);
-          // Keep a list of services by name.
-          serviceIndex[service.name] = service;
-        }
-      });
-    }));
-  })
-  .then(() => {
-    // Install the services
-    return Promise.all(services.map((service) => {
-      return installService(app, config, service);
-    }));
-  });
+    .then(files => {
+      // Iterate through the files and get the service factory
+      return Promise.all(files.map(file => {
+        const serviceFactory = require(path.join(normalizedPath, file)).serviceFactory;
+        // serviceFactory() may be a Promise that resolves to a list of services
+        return installFactory(app, config, serviceFactory);
+      }));
+    })
+    .then(() => {
+      // Install the services
+      return Promise.all(services.map((service) => {
+        return installService(app, config, service);
+      }));
+    });
 };

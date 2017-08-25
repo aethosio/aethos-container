@@ -3,10 +3,23 @@ Service container for AethOS services
 
 ## Installation
 
+Not currently available as a true npm package, so do the following to install it locally on your machine.
+
 ```
-npm install -S aethos-container
+git clone https://github.com/aethosio/aethos-container.git
+cd aethos-container
+npm install
+gulp build
+npm link # may require sudo
 ```
 
+Once this is done, in a project that requires aethos-container you can install the package using a symlink.
+
+The advantage of this is that we can continue developing this library until it's production ready.
+
+```
+npm link aethos-container
+```
 
 ## Usage
 
