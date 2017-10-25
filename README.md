@@ -13,13 +13,14 @@ gulp build
 npm link # may require sudo
 ```
 
-Once this is done, in a project that requires aethos-container you can install the package using a symlink.
-
-The advantage of this is that we can continue developing this library until it's production ready.
+Once this is done, in a project that requires aethos-container you can install the package using a symlink using:
 
 ```
 npm link aethos-container
 ```
+
+The advantage of this is that we can continue developing this library until it's production ready (Grunt - and I'm too lazy to publish it; see #2)
+
 
 ## Usage
 
