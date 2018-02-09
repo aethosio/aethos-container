@@ -15,10 +15,23 @@ function installService(app, config, service) {
     // as a list of arguments after app, config
     installedServices[service.name] = installDependencies(app, config, service)
       .then(dependencies => {
-        return Promise.resolve(service.install(app, config, ...dependencies))
-          .then(() => {
-            return service;
-          });
+        // TODO Make sure service.install is a function
+        if (service.install) {
+          return Promise.resolve(service.install(app, config, ...dependencies))
+            .then(() => {
+              return service;
+            });
+        }
+        else {
+          let serviceName;
+          if (service.name) {
+            serviceName = service.name;
+          }
+          else {
+            serviceName = service.constructor.name;
+          }
+          console.error(`${serviceName} does not have an install function`);
+        }
       });
   }
 
@@ -41,14 +54,17 @@ function installDependencies(app, config, service) {
 }
 
 function installFactory(app, config, serviceFactory) {
-  return Promise.resolve(serviceFactory(config))
-    .then(serviceList => {
-      for (const service of serviceList) {
-        services.push(service);
-        // Keep a list of services by name.
-        serviceIndex[service.name] = service;
-      }
-    });
+  if (serviceFactory) {
+    return Promise.resolve(serviceFactory(config))
+      .then(serviceList => {
+        for (const service of serviceList) {
+          services.push(service);
+          // Keep a list of services by name.
+          serviceIndex[service.name] = service;
+        }
+      });
+  }
+  return Promise.resolve(false);
 }
 
 module.exports.installFactory = installFactory;
@@ -60,14 +76,14 @@ module.exports.installServices = function installServices(app, config) {
   const normalizedPath = config.serviceFolder;
 
   return new Promise((resolve, reject) => {
-    // Get a list of all of the files in the config.serviceFolder directory
-    fs.readdir(normalizedPath, (err, files) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(files);
-    });
-  })
+      // Get a list of all of the files in the config.serviceFolder directory
+      fs.readdir(normalizedPath, (err, files) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(files);
+      });
+    })
     .then(files => {
       // Iterate through the files and get the service factory
       return Promise.all(files.map(file => {
