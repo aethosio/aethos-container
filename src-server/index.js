@@ -97,5 +97,12 @@ module.exports.installServices = function installServices(app, config) {
       return Promise.all(services.map((service) => {
         return installService(app, config, service);
       }));
+    }).then(() => {
+      // Start the services
+      return Promise.all(services.map((service) => {
+        if (service.start) {
+          return service.start(config);
+        }
+      }));
     });
 };
