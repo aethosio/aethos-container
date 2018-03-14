@@ -6,6 +6,15 @@ const services = [];
 const serviceIndex = {};
 const installedServices = {};
 
+function loadService(app, config, service) {
+  if (service.load) {
+    return Promise.resolve(service.load(app, config));
+  }
+  else {
+    return Promise.resolve();
+  }
+}
+
 function installService(app, config, service) {
   if (service.name in installedServices) {
     console.log(`${service.name} already installed`);
@@ -57,11 +66,14 @@ function installFactory(app, config, serviceFactory) {
   if (serviceFactory) {
     return Promise.resolve(serviceFactory(config))
       .then(serviceList => {
-        for (const service of serviceList) {
-          services.push(service);
-          // Keep a list of services by name.
-          serviceIndex[service.name] = service;
-        }
+        serviceList.reduce((promise, service) => {
+          return promise.then(() => {
+            services.push(service);
+            // Keep a list of services by name.
+            serviceIndex[service.name] = service;
+            return loadService(app, config, service);
+          });
+        }, Promise.resolve());
       });
   }
   return Promise.resolve(false);
