@@ -53,7 +53,15 @@ function installDependencies(app, config, service) {
   if (service.dependencies) {
     // If so, install those dependencies first.
     dependencies = service.dependencies().map(dependencyName => {
-      return installService(app, config, serviceIndex[dependencyName]);
+      const dependency = serviceIndex[dependencyName];
+      if (dependency) {
+        return installService(app, config, dependency);
+      }
+      else {
+        const err = `Error!  ${dependencyName} not found while installing ${service.name}`;
+        console.log(err);
+        throw new Error(err);
+      }
     });
   }
   else {
@@ -76,6 +84,7 @@ function installFactory(app, config, serviceFactory) {
         }, Promise.resolve());
       });
   }
+  console.log('serviceFactory not found!');
   return Promise.resolve(false);
 }
 
@@ -98,7 +107,12 @@ module.exports.installServices = function installServices(app, config) {
     })
     .then(files => {
       // Iterate through the files and get the service factory
-      return Promise.all(files.map(file => {
+      return Promise.all(files.filter((file) => {
+        if (config.disableServices) {
+          return !config.disableServices.includes(file);
+        }
+        return true;
+      }).map(file => {
         const serviceFactory = require(path.join(normalizedPath, file)).serviceFactory;
         // serviceFactory() may be a Promise that resolves to a list of services
         return installFactory(app, config, serviceFactory);
