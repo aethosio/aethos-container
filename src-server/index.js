@@ -1,134 +1,132 @@
 const fs = require('fs');
 const path = require('path');
 
-// Install services
-const services = [];
-const serviceIndex = {};
-const installedServices = {};
+class ServiceRegistry {
+  constructor(app, config) {
+    this.app = app;
+    this.config = config;
+    this.services = new Map();
+  }
 
-function loadService(app, config, service) {
-  if (service.load) {
-    return Promise.resolve(service.load(app, config));
-  }
-  else {
-    return Promise.resolve();
-  }
-}
+  installServices() {
+    if (!this.config.serviceFolder) {
+      throw new Error('aethos-container.installServices config requires serviceFolder entry');
+    }
+    const normalizedPath = this.config.serviceFolder;
 
-function installService(app, config, service) {
-  if (service.name in installedServices) {
-    console.log(`${service.name} already installed`);
-  }
-  else {
-    // Install the dependencies then install the service, passing those dependencies
-    // as a list of arguments after app, config
-    installedServices[service.name] = installDependencies(app, config, service)
-      .then(dependencies => {
-        // TODO Make sure service.install is a function
-        if (service.install) {
-          return Promise.resolve(service.install(app, config, ...dependencies))
-            .then(() => {
-              return service;
+    return new Promise((resolve, reject) => {
+        // Get a list of all of the files in the config.serviceFolder directory
+        fs.readdir(normalizedPath, (err, files) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(files);
+        });
+      })
+      .then(files => {
+        // Iterate through the files and get the service factory
+        return Promise.all(files.filter((file) => {
+          // Disable modules
+          if (this.config.disableModules) {
+            return !this.config.disableModules.includes(file);
+          }
+          return true;
+        }).map(file => {
+          console.log(`Loading module ${file}`);
+          const serviceModule = require(path.join(normalizedPath, file));
+          if (serviceModule.configure) {
+            return Promise.resolve(serviceModule.configure(this.app, this.config));
+          }
+          console.log(`WARNING: Using deprecated serviceFactory API.  ${file} is disabled.`);
+          return Promise.resolve();
+        }));
+      })
+      .then(() => {
+        // Install the services
+        return Array.from(this.services.values())
+          .reduce((promise, serviceDetails) => {
+            return promise.then(() => {
+              return this.$installService(serviceDetails);
             });
-        }
-        else {
-          let serviceName;
-          if (service.name) {
-            serviceName = service.name;
-          }
-          else {
-            serviceName = service.constructor.name;
-          }
-          console.error(`${serviceName} does not have an install function`);
-        }
+          }, Promise.resolve());
+      }).then(() => {
+        console.log('Starting services...');
+        // Start the services
+        return Array.from(this.services.values())
+          .reduce((promise, serviceDetails) => {
+            if (serviceDetails.service && serviceDetails.service.start) {
+              return promise.then(() => {
+                return serviceDetails.service.start(this.config);
+              });
+            }
+            return promise;
+          }, Promise.resolve());
       });
   }
 
-  return Promise.resolve(installedServices[service.name]);
-}
-
-function installDependencies(app, config, service) {
-  let dependencies;
-  // Check to see if the service has any dependencies
-  if (service.dependencies) {
-    // If so, install those dependencies first.
-    dependencies = service.dependencies().map(dependencyName => {
-      const dependency = serviceIndex[dependencyName];
-      if (dependency) {
-        return installService(app, config, dependency);
+  $installService(serviceDetails) {
+    // Return the service if it's already installed
+    if (serviceDetails.service) {
+      console.log(`${serviceDetails.name} already installed`);
+      return Promise.resolve(serviceDetails.service);
+    }
+    // Return if the service is disabled
+    if(this.config.disableServices) {
+      if(this.config.disableServices.includes(serviceDetails.name)) {
+        return Promise.resolve();
       }
-      else {
-        const err = `Error!  ${dependencyName} not found while installing ${service.name}`;
-        console.log(err);
-        throw new Error(err);
-      }
-    });
-  }
-  else {
-    dependencies = [];
-  }
-  return Promise.all(dependencies);
-}
+    }
+    if (serviceDetails.installing) {
+      throw new Error(`Circular dependency encountered while installing ${serviceDetails.name}`);
+    }
+    serviceDetails.installing = true;
 
-function installFactory(app, config, serviceFactory) {
-  if (serviceFactory) {
-    return Promise.resolve(serviceFactory(config))
-      .then(serviceList => {
-        serviceList.reduce((promise, service) => {
-          return promise.then(() => {
-            services.push(service);
-            // Keep a list of services by name.
-            serviceIndex[service.name] = service;
-            return loadService(app, config, service);
+    return this.$installDependencies(serviceDetails)
+      .then((dependencies) => {
+        if (!serviceDetails.serviceFactory) {
+          throw new Error(`Service factory not found for ${serviceDetails.name}`);
+        }
+        return Promise.resolve(serviceDetails.serviceFactory())
+          .then(service => {
+            serviceDetails.service = service;
+            if (service.install) {
+              return service.install(this.app, this.config, ...dependencies);
+            }
           });
-        }, Promise.resolve());
       });
   }
-  console.log('serviceFactory not found!');
-  return Promise.resolve(false);
+
+  $installDependencies(serviceDetails) {
+    let dependencies;
+    if (serviceDetails.dependencies) {
+      dependencies = serviceDetails.dependencies.map(dependencyName => {
+        if (!this.services.has(dependencyName)) {
+          const err = `Error!  ${dependencyName} not found while installing ${serviceDetails.name}`;
+          console.log(err);
+          throw new Error(err);
+        }
+        return this.$installService(this.services.get(dependencyName));
+      });
+    }
+    else {
+      dependencies = [];
+    }
+    return Promise.all(dependencies)
+      .then((resolvedDependencies) => {
+        return resolvedDependencies;
+      });
+  }
+
+  register(serviceDetails) {
+    this.services.set(serviceDetails.name, serviceDetails);
+    return this;
+  }
 }
 
-module.exports.installFactory = installFactory;
+module.exports.configure = (app, config) => {
+  config.serviceRegistry = new ServiceRegistry(app, config);
+};
 
 module.exports.installServices = function installServices(app, config) {
-  if (!config.serviceFolder) {
-    throw new Error('aethos-container.installServices config requires serviceFolder entry');
-  }
-  const normalizedPath = config.serviceFolder;
 
-  return new Promise((resolve, reject) => {
-      // Get a list of all of the files in the config.serviceFolder directory
-      fs.readdir(normalizedPath, (err, files) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(files);
-      });
-    })
-    .then(files => {
-      // Iterate through the files and get the service factory
-      return Promise.all(files.filter((file) => {
-        if (config.disableServices) {
-          return !config.disableServices.includes(file);
-        }
-        return true;
-      }).map(file => {
-        const serviceFactory = require(path.join(normalizedPath, file)).serviceFactory;
-        // serviceFactory() may be a Promise that resolves to a list of services
-        return installFactory(app, config, serviceFactory);
-      }));
-    })
-    .then(() => {
-      // Install the services
-      return Promise.all(services.map((service) => {
-        return installService(app, config, service);
-      }));
-    }).then(() => {
-      // Start the services
-      return Promise.all(services.map((service) => {
-        if (service.start) {
-          return service.start(config);
-        }
-      }));
-    });
 };
