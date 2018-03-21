@@ -75,13 +75,27 @@ const config = {
 
 ## Service Lifecycle
 
-First, all of the modules within the
+First, all of the modules within the service folder (configured via `config.serviceFolder`) are collected, and each non-disabled module is loaded using `require`, and then the module `configure` function is executed.  Typically this function uses `config.serviceRegistry.register()` to register one or more services.
 
-Next, each non-disabled module is loaded using `require`, and then the module `configure` function is executed.  Typically this function uses `conig.serviceRegistry.register()` to register one or more services.
+After loading the modules, the service registry works out dependencies and starts initializing each service by calling the service `constructor`, then calling the service `install(app, config, ...dependencies)`.  The `dependencies` list is the list of service objects identified as dependencies in the call to `serviceRegistry.register` (see below for examples).
 
+After each service has been constructed and installed, each of the services are started by calling its `start(config)` method.
 
+In short this pseudocode:
 
+```
+module.configure(app, config)
+  # Should call config.serviceRegistry.register()
+for each service
+  dependencies = getDependencies(service)
+  service.install(app, config, dependencies)
+for each service
+  service.start(config)
+```
 
+What's not clear in that pseudocode is that the dependencies are installed first.
+
+Circular references are not allowed.  If you need a service that might depend on your service, during your `service.start(config)` execution, call `config.serviceRegistry.getService(dependencyName)` and check for `unknown`.  The returned service will havealready been installed but not necessarily started.
 
 ## Example minimal service
 

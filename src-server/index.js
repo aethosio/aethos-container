@@ -52,6 +52,7 @@ class ServiceRegistry {
       }).then(() => {
         console.log('Starting services...');
         // Start the services
+        this.starting = true;
         return Array.from(this.services.values())
           .reduce((promise, serviceDetails) => {
             if (serviceDetails.service && serviceDetails.service.start) {
@@ -73,6 +74,7 @@ class ServiceRegistry {
     // Return if the service is disabled
     if (this.config.disableServices) {
       if (this.config.disableServices.includes(serviceDetails.name)) {
+        console.log(`Service ${serviceDetails.name} is disabled; not installing`);
         return Promise.resolve();
       }
     }
@@ -96,19 +98,39 @@ class ServiceRegistry {
       });
   }
 
+  getService(serviceName) {
+    if(!this.starting) {
+      throw new Error("serviceRegistry.getService() cannot be called except for within (or after) your service start has been called");
+    }
+    let mappedDependencyName = serviceName;
+    if (this.config.serviceMap && this.config.serviceMap[serviceName]) {
+      mappedDependencyName = this.config.serviceMap[serviceName];
+    }
+    if (this.services.has(mappedDependencyName)) {
+      return this.services.get(mappedDependencyName).service;
+    }
+  }
+
   $installDependencies(serviceDetails) {
     let dependencies;
     if (serviceDetails.dependencies) {
       dependencies = serviceDetails.dependencies.map(dependencyName => {
-        if (!this.services.has(dependencyName)) {
-          const err = `Error!  ${dependencyName} not found while installing ${serviceDetails.name}`;
+        let mappedDependencyName = dependencyName;
+        if (this.config.serviceMap && this.config.serviceMap[dependencyName]) {
+          mappedDependencyName = this.config.serviceMap[dependencyName];
+        }
+        if (!this.services.has(mappedDependencyName)) {
+          const err = `Error!  ${mappedDependencyName} not found while installing ${serviceDetails.name}`;
           throw new Error(err);
         }
-        if (this.config.disableServices.includes(dependencyName)) {
-          const err = `Error!  ${dependencyName} is disabled, yet is required by ${serviceDetails.name}`;
+        if (this.config.disableServices.includes(mappedDependencyName)) {
+          const err = `Error!  ${mappedDependencyName} is disabled, yet is required by ${serviceDetails.name}`;
           throw new Error(err);
         }
-        return this.$installService(this.services.get(dependencyName));
+        return this.$installService(this.services.get(mappedDependencyName))
+          .then(() => {
+            return this.services.get(mappedDependencyName).service;
+          });
       });
     }
     else {
