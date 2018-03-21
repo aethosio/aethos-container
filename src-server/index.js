@@ -102,7 +102,10 @@ class ServiceRegistry {
       dependencies = serviceDetails.dependencies.map(dependencyName => {
         if (!this.services.has(dependencyName)) {
           const err = `Error!  ${dependencyName} not found while installing ${serviceDetails.name}`;
-          console.log(err);
+          throw new Error(err);
+        }
+        if (this.config.disableServices.includes(dependencyName)) {
+          const err = `Error!  ${dependencyName} is disabled, yet is required by ${serviceDetails.name}`;
           throw new Error(err);
         }
         return this.$installService(this.services.get(dependencyName));
