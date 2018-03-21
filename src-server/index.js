@@ -71,8 +71,8 @@ class ServiceRegistry {
       return Promise.resolve(serviceDetails.service);
     }
     // Return if the service is disabled
-    if(this.config.disableServices) {
-      if(this.config.disableServices.includes(serviceDetails.name)) {
+    if (this.config.disableServices) {
+      if (this.config.disableServices.includes(serviceDetails.name)) {
         return Promise.resolve();
       }
     }
@@ -123,10 +123,8 @@ class ServiceRegistry {
   }
 }
 
-module.exports.configure = (app, config) => {
-  config.serviceRegistry = new ServiceRegistry(app, config);
-};
-
-module.exports.installServices = function installServices(app, config) {
-
+module.exports = {
+  configure: (app, config) => {
+    config.serviceRegistry = new ServiceRegistry(app, config);
+  },
 };
