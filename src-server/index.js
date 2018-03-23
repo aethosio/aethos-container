@@ -99,8 +99,9 @@ class ServiceRegistry {
   }
 
   getService(serviceName) {
-    if(!this.starting) {
-      throw new Error("serviceRegistry.getService() cannot be called except for within (or after) your service start has been called");
+    if (!this.starting) {
+      throw new Error("serviceRegistry.getService() cannot be called except for " +
+      "within (or after) your service start has been called");
     }
     let mappedDependencyName = serviceName;
     if (this.config.serviceMap && this.config.serviceMap[serviceName]) {
