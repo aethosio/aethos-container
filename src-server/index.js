@@ -124,7 +124,7 @@ class ServiceRegistry {
           const err = `Error!  ${mappedDependencyName} not found while installing ${serviceDetails.name}`;
           throw new Error(err);
         }
-        if (this.config.disableServices.includes(mappedDependencyName)) {
+        if (this.config.disableServices && this.config.disableServices.includes(mappedDependencyName)) {
           const err = `Error!  ${mappedDependencyName} is disabled, yet is required by ${serviceDetails.name}`;
           throw new Error(err);
         }
