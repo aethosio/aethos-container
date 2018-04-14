@@ -26,11 +26,17 @@ class ServiceRegistry {
       .then(files => {
         // Iterate through the files and get the service factory
         return Promise.all(files.filter((file) => {
-          // Disable modules
-          if (this.config.disableModules) {
-            return !this.config.disableModules.includes(file);
+          // Disable modules; default is enabled
+          let enabled = true;
+          if(this.config.enableModules) {
+            enabled = this.config.enableModules.includes(file);
           }
-          return true;
+          if (this.config.disableModules) {
+            if(this.config.disableModules.includes(file)) {
+              enabled = false;
+            }
+          }
+          return enabled;
         }).map(file => {
           console.log(`Loading module ${file}`);
           const serviceModule = require(path.join(normalizedPath, file));
