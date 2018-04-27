@@ -98,6 +98,7 @@ class ServiceRegistry {
           .then(service => {
             serviceDetails.service = service;
             if (service.install) {
+              console.log(`Installing ${serviceDetails.name}`);
               return service.install(this.app, this.config, ...dependencies);
             }
           });
